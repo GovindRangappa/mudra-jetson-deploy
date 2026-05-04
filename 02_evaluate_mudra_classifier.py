@@ -74,7 +74,14 @@ def main():
     print("Class names from folder:", ds.classes)
 
     print("\nClassification Report:")
-    print(classification_report(all_true, all_preds, target_names=ds.classes, digits=4))
+    print(classification_report(
+      all_true,
+      all_pred,
+      labels=ds.classes,
+      target_names=ds.classes,
+      zero_division=0,
+      digits=4
+    ))
 
     print("\nConfusion Matrix:")
     print(confusion_matrix(all_true, all_preds))
