@@ -5,9 +5,9 @@ Usage:
   python 01_train_resnet18.py --data mudra_dataset --epochs 15 --batch-size 32
 
 Outputs:
-  models/mudra_resnet18_best.pth
-  models/class_names.json
-  models/training_history.json
+  models_v2_9class/mudra_resnet18_best.pth
+  models_v2_9class/class_names.json
+  models_v2_9class/training_history.json
 """
 
 import argparse
@@ -113,7 +113,7 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--freeze-backbone", action="store_true")
-    parser.add_argument("--out-dir", default="models")
+    parser.add_argument("--out-dir", default="models_v2_9class")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

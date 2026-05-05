@@ -1,15 +1,15 @@
 """
-Prepare a 3-class mudra dataset for training.
+Prepare a configurable mudra dataset for training.
 
 Recommended usage:
-  python 00_download_prepare_data.py --source hf --out mudra_dataset
+  python 00_download_prepare_data.py --source hf --out mudra_dataset --max-per-class 2500
 
 This creates:
   mudra_dataset/
     train/
       pataka/
       tripataka/
-      katakamukham/
+      ...
     val/
       ...
     test/
@@ -19,7 +19,7 @@ If the Hugging Face dataset column names differ, run:
   python 00_download_prepare_data.py --source hf --list-classes
 
 If you already downloaded/cloned a dataset locally, use:
-  python 00_download_prepare_data.py --source local --local-dir /path/to/dataset --out mudra_dataset
+  python 00_download_prepare_data.py --source local --local-dir /path/to/dataset --out mudra_dataset --max-per-class 2500
 """
 
 import argparse
@@ -31,10 +31,16 @@ from difflib import SequenceMatcher
 from PIL import Image
 from tqdm import tqdm
 
-TARGETS = {
+DEFAULT_TARGETS = {
     "pataka": ["pataka", "pathaka", "pataaka", "pathakam"],
     "tripataka": ["tripataka", "tripathaka", "tri pataka", "tripataaka"],
-    "katakamukham": ["katakamukham", "katakamukha", "kataka mukha", "katakamukh"],
+    "alapadma": ["alapadma", "alapadmam", "alapadma hasta", "alapadm"],
+    "musti": ["musti", "mushti", "mushthi", "musti hasta", "mushti hasta"],
+    "ardhapataka": ["ardhapataka", "ardha pataka", "ardhapatakam"],
+    "ardhachandra": ["ardhachandra", "ardha chandra", "ardhachandram"],
+    "mayura": ["mayura", "mayuram", "mayura hasta"],
+    "shikhara": ["shikhara", "sikhara", "shikharam"],
+    "kapittha": ["kapittha", "kapitha", "kapittham"],
 }
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -49,11 +55,11 @@ def normalize_name(s: str) -> str:
         .replace("\\", "")
     )
 
-def canonical_label(raw_label: str):
+def canonical_label(raw_label: str, targets):
     n = normalize_name(raw_label)
 
     # Exact/alias match first
-    for canonical, aliases in TARGETS.items():
+    for canonical, aliases in targets.items():
         for a in aliases:
             if normalize_name(a) == n:
                 return canonical
@@ -61,7 +67,7 @@ def canonical_label(raw_label: str):
     # Fuzzy fallback
     best_label = None
     best_score = 0.0
-    for canonical, aliases in TARGETS.items():
+    for canonical, aliases in targets.items():
         for a in aliases:
             score = SequenceMatcher(None, normalize_name(a), n).ratio()
             if score > best_score:
@@ -73,10 +79,10 @@ def canonical_label(raw_label: str):
 
     return None
 
-def safe_clear_out(out: Path):
+def safe_clear_out(out: Path, targets):
     out.mkdir(parents=True, exist_ok=True)
     for split in ["train", "val", "test"]:
-        for cls in TARGETS:
+        for cls in targets:
             (out / split / cls).mkdir(parents=True, exist_ok=True)
 
 def save_image(img, path: Path):
@@ -98,26 +104,33 @@ def split_items(items, seed=42, train_ratio=0.75, val_ratio=0.15):
         "test": items[n_train + n_val:],
     }
 
-def prepare_from_local(local_dir: Path, out: Path, seed=42):
+def prepare_from_local(local_dir: Path, out: Path, targets, seed=42, max_per_class=None):
     """
     Expects a dataset folder with class folders somewhere inside.
     It recursively searches image files and uses the parent folder as the class label.
     """
-    all_items = {k: [] for k in TARGETS}
+    all_items = {k: [] for k in targets}
 
     for img_path in local_dir.rglob("*"):
         if img_path.suffix.lower() not in IMG_EXTS:
             continue
 
         raw_class = img_path.parent.name
-        canon = canonical_label(raw_class)
+        canon = canonical_label(raw_class, targets)
         if canon:
             all_items[canon].append(img_path)
 
     for cls, paths in all_items.items():
         print(f"{cls}: found {len(paths)} images")
 
-    safe_clear_out(out)
+    if max_per_class is not None and max_per_class > 0:
+        rng = random.Random(seed)
+        for cls, paths in all_items.items():
+            if len(paths) > max_per_class:
+                all_items[cls] = rng.sample(paths, k=max_per_class)
+                print(f"{cls}: capped to {max_per_class} images")
+
+    safe_clear_out(out, targets)
 
     for cls, paths in all_items.items():
         split_map = split_items(paths, seed=seed)
@@ -126,7 +139,7 @@ def prepare_from_local(local_dir: Path, out: Path, seed=42):
                 dst = out / split / cls / f"{cls}_{i:05d}{src.suffix.lower()}"
                 shutil.copy2(src, dst)
 
-def prepare_from_hf(out: Path, seed=42, list_classes=False):
+def prepare_from_hf(out: Path, targets, seed=42, list_classes=False, max_per_class=None):
     from datasets import load_dataset, Image as HFImage, ClassLabel
 
     ds = load_dataset("Samarth0710/bharatanatyam-mudra-dataset")
@@ -179,13 +192,13 @@ def prepare_from_hf(out: Path, seed=42, list_classes=False):
             print(" -", name)
         return
 
-    all_items = {k: [] for k in TARGETS}
+    all_items = {k: [] for k in targets}
 
     # Some HF datasets already have train split only; we collect then split ourselves
     for split_name in ds.keys():
         for idx, row in enumerate(tqdm(ds[split_name], desc=f"Scanning HF split {split_name}")):
             raw_label = label_to_name(row[label_col])
-            canon = canonical_label(raw_label)
+            canon = canonical_label(raw_label, targets)
             if canon:
                 all_items[canon].append(row[image_col])
 
@@ -196,7 +209,14 @@ def prepare_from_hf(out: Path, seed=42, list_classes=False):
         print("\nWARNING: One or more target classes had 0 images.")
         print("Run with --list-classes to inspect exact dataset class names.")
 
-    safe_clear_out(out)
+    if max_per_class is not None and max_per_class > 0:
+        rng = random.Random(seed)
+        for cls, items in all_items.items():
+            if len(items) > max_per_class:
+                all_items[cls] = rng.sample(items, k=max_per_class)
+                print(f"{cls}: capped to {max_per_class} images")
+
+    safe_clear_out(out, targets)
 
     for cls, items in all_items.items():
         split_map = split_items(items, seed=seed)
@@ -212,16 +232,45 @@ def main():
     parser.add_argument("--out", type=str, default="mudra_dataset")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--list-classes", action="store_true")
+    parser.add_argument(
+        "--targets",
+        nargs="+",
+        default=list(DEFAULT_TARGETS.keys()),
+        help="Subset of mudras to include. Default includes 9 mudras."
+    )
+    parser.add_argument(
+        "--max-per-class",
+        type=int,
+        default=2500,
+        help="Maximum samples to keep per class before train/val/test split."
+    )
     args = parser.parse_args()
 
     out = Path(args.out)
 
+    unknown = [t for t in args.targets if t not in DEFAULT_TARGETS]
+    if unknown:
+        raise ValueError(f"Unknown targets: {unknown}. Valid options: {list(DEFAULT_TARGETS.keys())}")
+    targets = {k: DEFAULT_TARGETS[k] for k in args.targets}
+
     if args.source == "hf":
-        prepare_from_hf(out, seed=args.seed, list_classes=args.list_classes)
+        prepare_from_hf(
+            out,
+            targets=targets,
+            seed=args.seed,
+            list_classes=args.list_classes,
+            max_per_class=args.max_per_class
+        )
     else:
         if not args.local_dir:
             raise ValueError("--local-dir is required when --source local")
-        prepare_from_local(Path(args.local_dir), out, seed=args.seed)
+        prepare_from_local(
+            Path(args.local_dir),
+            out,
+            targets=targets,
+            seed=args.seed,
+            max_per_class=args.max_per_class
+        )
 
     print("\nDone. Dataset prepared at:", out.resolve())
 

@@ -2,7 +2,7 @@
 Evaluate the trained classifier on a dataset split.
 
 Usage:
-  python 02_evaluate_mudra_classifier.py --data mudra_dataset --split test --model models/mudra_resnet18_best.pth
+  python 02_evaluate_mudra_classifier.py --data mudra_dataset --split test --model models_v2_9class/mudra_resnet18_best.pth
 
 For your Jetson webcam pictures, place them like:
   real_test/
@@ -11,7 +11,7 @@ For your Jetson webcam pictures, place them like:
     katakamukham/
 
 Then run:
-  python 02_evaluate_mudra_classifier.py --data real_test --split . --model models/mudra_resnet18_best.pth
+  python 02_evaluate_mudra_classifier.py --data real_test --split . --model models_v2_9class/mudra_resnet18_best.pth
 """
 
 import argparse
@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="mudra_dataset")
     parser.add_argument("--split", default="test")
-    parser.add_argument("--model", default="models/mudra_resnet18_best.pth")
+    parser.add_argument("--model", default="models_v2_9class/mudra_resnet18_best.pth")
     parser.add_argument("--batch-size", type=int, default=32)
     args = parser.parse_args()
 

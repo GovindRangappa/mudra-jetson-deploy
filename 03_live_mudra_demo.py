@@ -2,7 +2,7 @@
 Run live webcam mudra classification.
 
 Usage on Jetson:
-  python3 03_live_mudra_demo.py --model models/mudra_resnet18_best.pth --camera 0
+  python3 03_live_mudra_demo.py --model models_v2_9class/mudra_resnet18_best.pth --camera 0
 
 Press q to quit.
 """
@@ -23,7 +23,7 @@ def build_model(num_classes):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="models/mudra_resnet18_best.pth")
+    parser.add_argument("--model", default="models_v2_9class/mudra_resnet18_best.pth")
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--confidence-threshold", type=float, default=0.50)
     args = parser.parse_args()
