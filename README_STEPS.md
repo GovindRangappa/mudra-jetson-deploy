@@ -77,3 +77,4 @@ Then run:
 ```bash
 python3 03_live_mudra_demo.py --model models_v2_9class/mudra_resnet18_best.pth --camera 0
 ```
+9999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9999
